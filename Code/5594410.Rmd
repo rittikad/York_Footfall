@@ -1,0 +1,288 @@
+---
+title: "Business Statistics Mid-Term Assessment IB94X0 2024-2025 #1"
+author: "5594410"
+date: "`r Sys.Date()`"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+### **CERTIFICATION OF ORIGINAL WORK**
+
+---
+
+This is to certify that the work I am submitting is my own. I am aware of the University of Warwick regulation concerning plagiarism and collusion. 
+
+No substantial part(s) of the work  submitted  here has also been submitted by me  in other assessments for accredited courses of study, and I acknowledge that if this has been done an appropriate reduction in the mark I might otherwise have received will be made.
+
+AI was used in the preparation of this work. It was used in the development of the code: It was used to provide example uses of functions or approaches to elements of the challenges which were then interpreted by me and modified to be applicable to this data/report.
+
+---
+
+### **PROJECT OVERVIEW**
+
+---
+
+This report helps the promoter make a decision regarding the placement of their stall to maximize attraction, performing the specific analyses requested.
+
+1. Provide data integrity and quality check of the dataset.
+
+2. Provide a summary table for each location that includes the first and last measurement dates, mean daily footfall, and the standard deviation, highest, and lowest daily footfall.
+
+3. Provide a plot showing the distribution of footfall across all days in the dataset from the year 2019(pre-pandemic).
+
+4. Perform a two sample t-test to compare the footfall on Coney Street to Stonegate.
+
+5. Perform an additional two sample t-test to compare the footfall on Coney Street to Stonegate only on weekends (i.e. 
+Saturdays/Sundays). 
+
+6. What would you advise the promoter about whether they should place their stall on Coney Street or Stonegate to maximize the number of passers by:
+a. if they were doing so every day of the week 
+b. if they were doing so only at weekends.
+
+---
+
+### **DATA DICTIONARY**
+
+This data comes from cameras that automatically measure the number of people who walk past a particular location. The variables are described in the table below
+
+Variable | Description
+------------- | -------------
+Date| Specific date of the recorded footfall data
+SiteName| City where the footfall data was collected
+LocationName| Specific street or location within sitename(i.e York) where footfall was recorded
+WeekDay| Day of the week corresponding to each date
+TotalCount| Recorded footfall at the specific location on the given date
+Recording_ID| Unique identifier for each recording.
+
+---
+
+# **SECTION 1**
+
+### **Loading libraries for data manipulation, visualization and table styling**
+
+
+```{r setup, message=FALSE, warning=FALSE}
+
+# Load necessary libraries
+library(tidyverse)  # For data manipulation and visualization
+
+# install.packages("kableExtra")  # Uncomment if kableExtra is not installed
+
+library(kableExtra)  # For table styling
+
+options(width=100)  # Set console output width
+
+```
+---
+
+### **1. Loading of the dataset**
+
+```{r}
+
+ # Read the York footfall dataset
+york_footfall <- read_csv("York_Footfall_data.csv")
+
+# Display the first five rows of the dataset for an overview
+head(york_footfall)
+
+```
+
+### **2. Provide data integrity and quality check of the dataset**
+
+```{r}
+
+# 1. Displays the structure of a dataset, including information about its type, number of observations, variable names, data types, and a preview of the data in each variable.
+
+str(york_footfall)
+
+#2. Check for duplicates in the dataset.
+
+duplicates <- york_footfall %>%
+  filter(duplicated(.) | duplicated(., fromLast = TRUE)) # Identify duplicate rows
+
+print(duplicates) # Display duplicates if any
+
+# 3. Check for missing values (NA) in the dataset
+
+#Considering that TotalCount is deemed valid, the decision was made to retain the NA values in the RecordingID column. It is an assumption that these NA entries may represent instances of missed data rather than irrelevant information; therefore, no removal was implemented for this column.
+
+missing_values <- colSums(is.na(york_footfall))
+
+print(missing_values) # Show the number of missing values per column
+
+# Remove rows with missing values in "TotalCount" column
+cleaned_york_footfall_dataset <- york_footfall %>%
+  filter(!is.na(TotalCount))
+
+print(cleaned_york_footfall_dataset) # Show cleaned dataset
+
+#4. Check the cleaned dataset for outliers
+
+#Outliers in the locations were kept because they represented higher foot traffic during seasonal events, such as Christmas. This choice was made to preserve the dataset's integrity and ensure that the analysis accurately reflects visitor behavior without distorting the results.
+
+footfall_outliers <- cleaned_york_footfall_dataset %>%
+  group_by(LocationName) %>% # Groups the data by LocationName
+  
+  mutate( # Use mutate to add new variables based on the grouped data
+    
+    Q1 = quantile(TotalCount, 0.25, na.rm = TRUE), # Calculates the first quartile (Q1), ignoring NA values
+    
+    Q3 = quantile(TotalCount, 0.75, na.rm = TRUE), # Calculates the third quartile (Q3), ignoring NA values
+    
+    IQR = Q3 - Q1, # Calculates the interquartile range (IQR)
+    
+    lower_bound = Q1 - 1.5 * IQR,  # Calculates the lower bound for outliers (Q1 - 1.5 * IQR)
+    
+    upper_bound = Q3 + 1.5 * IQR, # Calculates the upper bound for outliers (Q3 + 1.5 * IQR)
+    
+    is_outlier = TotalCount < lower_bound | TotalCount > upper_bound # Identifies if each TotalCount observation is an outlier
+  )
+
+outliers <- footfall_outliers %>% filter(is_outlier) # Filter outliers
+
+# Summarize outlier statistics by location
+outlier_summary <- outliers %>%
+  group_by(LocationName) %>%
+  summarise(
+    total_outliers = n()
+  )
+
+# Display the outliers across locations
+print(outlier_summary)
+```
+
+### **3. Provide a summary table for each location that includes the first and last measurement dates, mean daily footfall, and the standard deviation, highest, and lowest daily footfall**
+
+```{r}
+
+# Creating the summary table by grouping data based on Location
+
+york_footfall_summary_table <- cleaned_york_footfall_dataset %>%
+  group_by(LocationName) %>%  # Grouping by location name
+  summarise(
+    First_FootFall_Measurement_Date = min(Date),  # Earliest measurement date
+    Last_Footfall_Measurement_Date = max(Date),    # Latest measurement date
+    Mean_Daily_Footfall = mean(TotalCount, na.rm = TRUE),  # Mean daily footfall
+    Std_Dev_Daily_Footfall = sd(TotalCount, na.rm = TRUE),  # Standard deviation
+    Highest_Daily_Footfall = max(TotalCount, na.rm = TRUE), # Highest daily footfall
+    Lowest_Daily_Footfall = min(TotalCount, na.rm = TRUE)   # Lowest daily footfall
+  )
+
+# Display the summary table
+
+print(york_footfall_summary_table)
+
+```
+
+### **4. Plotting the distribution of footfall for each location across all days in the dataset for the year 2019(Pre-COVID19)**
+
+```{r}
+
+#Filter the york footfall dataset for the year 2019(pre-covid19)
+
+york_footfall_data_2019 <- cleaned_york_footfall_dataset %>% filter(year(Date) == 2019)
+
+
+# Plot the histogram of footfall for each location based on the "york_footfall_data_2019" dataset
+
+hist_2019_dataset <- ggplot(york_footfall_data_2019, aes(x = TotalCount, fill = LocationName)) +
+  geom_histogram(bins = 25, alpha = 0.6) +
+  facet_wrap(~ LocationName, scales = "free_y") +  # Separate plots for each location
+  labs(title = "Figure 1. DISTRIBUTION OF FOOTFALL ACROSS LOCATIONS IN 2019",
+       x = "Total Daily Footfall", y = "Frequency")  +  # Labeling of the plot and the axes
+  theme_minimal() +
+  theme(legend.position = "none")
+
+print(hist_2019_dataset)
+```
+
+### **5. Perform a two sample t-test to compare the footfall on Coney Street to Stonegate.**
+
+```{r}
+
+# Filter the data for everyday of the week and the two locations of interest(Coney Street and Stonegate)
+
+coney_street <- york_footfall_data_2019 %>% filter(LocationName == "Coney Street") %>% select(TotalCount) # Subset data for Coney Street
+
+# Subset data for Stonegate
+stonegate <- york_footfall_data_2019 %>% filter(LocationName == "Stonegate") %>% select(TotalCount)
+
+# Perform two sample t-test to compare the mean footfall between Coney Street and Stonegate for everyday of the week
+all_days_t_test_result <- t.test(coney_street$TotalCount, stonegate$TotalCount)
+
+# Print the results of the t-test
+print(all_days_t_test_result)  # Output includes t-statistic, degrees of freedom, p-value, and confidence interval
+
+```
+
+### **6. Perform an additional two sample t-test to compare the footfall on Coney Street to Stonegate only on weekends (i.e. Saturdays/Sundays).**
+
+```{r}
+# Filter the data for weekends (Saturday and Sunday) and the two locations of interest(Coney Street and Stonegate)
+
+weekend_york_footfall_data <- york_footfall_data_2019 %>%
+  filter(WeekDay %in% c("Saturday", "Sunday") & LocationName %in% c("Coney Street", "Stonegate"))
+
+# Perform an independent two-sample t-test, compare the mean footfall of Coney Street and Stonegate during weekends
+
+weekend_t_test_result <- t.test(TotalCount ~ LocationName, data = weekend_york_footfall_data)
+
+# Print the results of the t-test
+print(weekend_t_test_result)  # Output includes t-statistic, degrees of freedom, p-value, and confidence interval
+```
+
+---
+
+## **SECTION 2**
+
+### **YORK FOOTFALL ANALYSIS REPORT**
+
+This report presents the results from analyses carried out for the promoter, utilizing data gathered from 8,204 individuals passing by. During initial checks on data quality and consistency, we identified minor gaps and a few outliers. After accounting for these by excluding incomplete entries, our final sample size stands at 8,194 passers-by.
+
+The report begins with an overview of foot traffic across all York locations, which includes the first and last dates of measurement, average daily footfall, standard deviation, and the range between the highest and lowest recorded daily footfall (see Table 1).
+
+```{r, echo='false'}
+
+kable(york_footfall_summary_table, caption = "Table 1. SUMMARY OF FOOTFALL DISTRIBUTION ACROSS LOCATIONS IN YORK") %>%
+  kable_styling(
+    bootstrap_options = c("striped", "hover", "condensed"), 
+    full_width = F, 
+    position = "left",
+    font_size = 12,
+    latex_options = c("striped", "hold_position")
+  ) %>%
+  column_spec(1) %>%
+  column_spec(2) %>%
+  column_spec(3, background = "#f7f7f7") %>%
+  row_spec(0, bold = TRUE, background = "#d9edf7", color = "#31708f")
+
+```
+
+#### **Footfall Distribution Overview (Pre-Pandemic)**
+
+Figure 1 shows foot traffic patterns across York’s main locations in 2019, reflecting trends before COVID-19. Coney Street and Parliament Street saw the highest, most stable footfall, making Coney Street ideal for steady pedestrian engagement. Micklegate experienced lower but steady traffic, while Stonegate had moderate and fluctuating activity.
+
+```{r, echo='false'}
+
+print(hist_2019_dataset)
+
+```
+
+
+#### **Daily and Weekend Comparison of Coney Street and Stonegate**
+
+The t-test analysis indicates that Coney Street’s average footfall (20,817) is significantly higher than that of Stonegate (19,204), with a 95% confidence interval ranging from 671 to 2,556 (t = 3.36, p = 0.0008). This highlights Coney Street as the better choice for maximizing daily exposure.
+
+On the other hand, a separate analysis of weekend foot traffic shows that both locations are statistically comparable (t = -0.29, p = 0.77), with similar averages (Coney Street: 25,863; Stonegate: 26,167). This suggests that either location would work well for attracting visitors on weekends.
+
+
+#### **Advice To The Promoter For Stall Placement Recommendations for York**
+
+**For Every Day of the Week**: **Coney Street has the best location because it has a higher footfall on every day of the week than Stonegate.** Therefore, it would be the better location for ongoing operations because of the higher visibility and potential engagement.
+
+**For Weekends Only**: **Coney Street and Stonegate have no difference in footfall, with the former having a slightly higher figure. This indicates that visitors to both places are almost equal in number.** Thus, one would make no mistake in opting for either place since both are expected to attract roughly the same crowd on weekends.
+
+#### **Conclusion**
+
+**Coney Street is the ideal choice for continuous operations throughout the week, thanks to its higher foot traffic and better visibility. On weekends, both Coney Street and Stonegate attract similar crowds, making either location a strong option for placement.** Overall, both spots have great potential to draw in visitors.
