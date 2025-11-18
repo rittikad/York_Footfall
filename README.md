@@ -59,6 +59,13 @@ This project analyzes pedestrian foot traffic across York to determine the optim
 
 ---
 
+## 📂 Quick Access
+- **[R Script](https://github.com/rittikad/York_Footfall/blob/main/Code/5594410.Rmd)** – Complete code for data cleaning, analysis, and visualization  
+- **[Dataset](https://github.com/rittikad/York_Footfall/tree/main/Data)** – Raw footfall dataset  
+- **[HTML Report](https://github.com/rittikad/York_Footfall/tree/main/HTML_Report)** – Final report with tables, plots, and explanations
+
+---
+
 📊 **Results & Insights**
 
 | Analysis | Observation | Key Takeaway |
